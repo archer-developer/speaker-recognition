@@ -13,6 +13,7 @@ from homeassistant.components.conversation import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.core import (
     Context,
     Event,
@@ -127,8 +128,17 @@ class SpeakerRecognitionConversationEntity(
 
     @property
     def recognition(self) -> SpeakerRecognition:
-        """Get the speaker recognition instance."""
-        return self._main_entry.runtime_data
+        """Get the speaker recognition instance.
+
+        Re-looked-up fresh each time -- see the same fix in stt.py for why
+        caching the ConfigEntry reference is unsafe across entry reloads.
+        """
+        main_entry = _get_main_entry(self.hass)
+        if main_entry is None or not hasattr(main_entry, "runtime_data"):
+            raise HomeAssistantError(
+                "Speaker Recognition main entry is not set up or was reloaded"
+            )
+        return main_entry.runtime_data
 
     @property
     def min_confidence(self) -> float:

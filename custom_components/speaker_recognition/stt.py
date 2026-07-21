@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterable
 import logging
 
@@ -20,6 +21,7 @@ from homeassistant.components.stt import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
@@ -163,8 +165,20 @@ class SpeakerRecognitionSTTEntity(SpeechToTextEntity):
 
     @property
     def recognition(self) -> SpeakerRecognition:
-        """Get the speaker recognition instance."""
-        return self._main_entry.runtime_data
+        """Get the speaker recognition instance.
+
+        NOTE: we intentionally re-look-up the main config entry here instead
+        of relying on the cached self._main_entry reference. Reloading the
+        main entry (e.g. after updating voice samples) replaces the
+        ConfigEntry object entirely, so a cached reference goes stale and
+        its runtime_data becomes unavailable.
+        """
+        main_entry = _get_main_entry(self.hass)
+        if main_entry is None or not hasattr(main_entry, "runtime_data"):
+            raise HomeAssistantError(
+                "Speaker Recognition main entry is not set up or was reloaded"
+            )
+        return main_entry.runtime_data
 
     @property
     def supported_languages(self) -> list[str]:
@@ -212,24 +226,35 @@ class SpeakerRecognitionSTTEntity(SpeechToTextEntity):
 
         # Collect audio data for speaker recognition
         audio_buffer = bytearray()
+        recognition_task: asyncio.Task | None = None
 
         async def buffered_stream() -> AsyncIterable[bytes]:
             """Buffer the stream while passing it through."""
+            nonlocal recognition_task
             async for chunk in stream:
                 audio_buffer.extend(chunk)
                 yield chunk
+            # Audio is fully received at this point, even though the source
+            # STT entity is still running its own transcription model below.
+            # Start speaker recognition now so it runs CONCURRENTLY with
+            # Whisper's transcription compute, instead of waiting for it.
+            if audio_buffer:
+                recognition_task = asyncio.create_task(
+                    self.recognition.async_recognize(
+                        bytes(audio_buffer), sample_rate=metadata.sample_rate
+                    )
+                )
 
         # Forward the buffered stream to the source entity
         result = await source_entity.async_process_audio_stream(
             metadata, buffered_stream()
         )
 
-        # Perform speaker recognition on the collected audio
-        if audio_buffer:
+        # Await the recognition task, which was very likely already finished
+        # by the time Whisper returned (Resemblyzer is much lighter-weight)
+        if recognition_task is not None:
             try:
-                recognition_result = await self.recognition.async_recognize(
-                    bytes(audio_buffer), sample_rate=metadata.sample_rate
-                )
+                recognition_result = await recognition_task
 
                 if recognition_result:
                     # Log the recognition result as error for now

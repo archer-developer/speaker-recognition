@@ -67,7 +67,26 @@ class SpeakerRecognition:
                     relative_path = media_id.replace(
                         "media-source://media_source/local/", ""
                     )
-                    full_path = Path(self.hass.config.path("media")) / relative_path
+                    # NOTE: hass.config.path("media") assumes <config>/media,
+                    # but on Container installs "local" media is a separately
+                    # mounted directory (typically /media), configured via
+                    # hass.config.media_dirs. Resolve it properly, falling
+                    # back to the old (often wrong) behavior only if the
+                    # media_dirs mapping is unavailable for some reason.
+                    local_media_dir = self.hass.config.media_dirs.get(
+                        "local", self.hass.config.path("media")
+                    )
+                    full_path = Path(local_media_dir) / relative_path
+
+                    if not full_path.exists():
+                        _LOGGER.error(
+                            "Voice sample file not found for user %s: %s "
+                            "(resolved local media dir: %s)",
+                            user_id,
+                            full_path,
+                            local_media_dir,
+                        )
+                        continue
 
                     # Read the audio file
                     audio_data = await self.hass.async_add_executor_job(
@@ -103,7 +122,7 @@ class SpeakerRecognition:
             self._trained = True
             _LOGGER.info(
                 "Speaker recognition training completed: %d users trained",
-                result.users_trained,
+                result.count,
             )
 
     async def async_recognize(
