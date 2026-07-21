@@ -21,6 +21,10 @@ CONF_STT_ENTITY = "stt_entity"
 CONF_CONVERSATION_ENTITY = "conversation_entity"
 CONF_MIN_CONFIDENCE = "min_confidence"
 
+# STT noise filtering
+CONF_STT_MIN_CONFIDENCE = "stt_min_confidence"
+
 # Defaults
 DEFAULT_BACKEND_URL = "http://localhost:8099"
 DEFAULT_MIN_CONFIDENCE = 0.0
+DEFAULT_STT_MIN_CONFIDENCE = 0.6

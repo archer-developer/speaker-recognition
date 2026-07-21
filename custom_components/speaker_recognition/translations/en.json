@@ -13,11 +13,13 @@
         "description": "Configure the STT entity and voice samples for speaker recognition.",
         "data": {
           "stt_entity": "Speech-to-text entity",
-          "voice_samples": "Voice samples"
+          "voice_samples": "Voice samples",
+          "stt_min_confidence": "Minimum STT confidence"
         },
         "data_description": {
           "stt_entity": "Select the STT entity to use for speaker recognition",
-          "voice_samples": "Configure voice samples for each user to enable speaker recognition"
+          "voice_samples": "Configure voice samples for each user to enable speaker recognition",
+          "stt_min_confidence": "Minimum speaker recognition confidence required to pass audio to the pipeline (0.0-1.0). Audio below this threshold is discarded as noise."
         }
       },
       "conversation": {
@@ -46,11 +48,13 @@
         "description": "Update the STT entity and voice samples.",
         "data": {
           "stt_entity": "Speech-to-text entity",
-          "voice_samples": "Voice samples"
+          "voice_samples": "Voice samples",
+          "stt_min_confidence": "Minimum STT confidence"
         },
         "data_description": {
           "stt_entity": "Select the STT entity to use for speaker recognition",
-          "voice_samples": "Add or modify voice samples for speaker recognition"
+          "voice_samples": "Add or modify voice samples for speaker recognition",
+          "stt_min_confidence": "Minimum speaker recognition confidence required to pass audio to the pipeline (0.0-1.0). Audio below this threshold is discarded as noise."
         }
       },
       "conversation_options": {

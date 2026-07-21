@@ -13,11 +13,13 @@
         "description": "Konfigurieren Sie die STT-Entität und Sprachproben für die Sprechererkennung.",
         "data": {
           "stt_entity": "Sprache-zu-Text-Entität",
-          "voice_samples": "Sprachproben"
+          "voice_samples": "Sprachproben",
+          "stt_min_confidence": "Minimale STT-Konfidenz"
         },
         "data_description": {
           "stt_entity": "Wählen Sie die STT-Entität für die Sprechererkennung aus",
-          "voice_samples": "Konfigurieren Sie Sprachproben für jeden Benutzer, um die Sprechererkennung zu aktivieren"
+          "voice_samples": "Konfigurieren Sie Sprachproben für jeden Benutzer, um die Sprechererkennung zu aktivieren",
+          "stt_min_confidence": "Erforderliche Mindest-Sprechererkennungskonfidenz, um Audio an die Pipeline weiterzuleiten (0.0-1.0). Audio unterhalb dieses Schwellenwerts wird als Rauschen verworfen."
         }
       },
       "conversation": {
@@ -46,11 +48,13 @@
         "description": "Aktualisieren Sie die STT-Entität und Sprachproben.",
         "data": {
           "stt_entity": "Sprache-zu-Text-Entität",
-          "voice_samples": "Sprachproben"
+          "voice_samples": "Sprachproben",
+          "stt_min_confidence": "Minimale STT-Konfidenz"
         },
         "data_description": {
           "stt_entity": "Wählen Sie die STT-Entität für die Sprechererkennung aus",
-          "voice_samples": "Fügen Sie Sprachproben für die Sprechererkennung hinzu oder ändern Sie diese"
+          "voice_samples": "Fügen Sie Sprachproben für die Sprechererkennung hinzu oder ändern Sie diese",
+          "stt_min_confidence": "Erforderliche Mindest-Sprechererkennungskonfidenz, um Audio an die Pipeline weiterzuleiten (0.0-1.0). Audio unterhalb dieses Schwellenwerts wird als Rauschen verworfen."
         }
       },
       "conversation_options": {

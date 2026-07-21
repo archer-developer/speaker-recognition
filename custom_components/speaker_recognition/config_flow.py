@@ -23,10 +23,12 @@ from .const import (
     CONF_MIN_CONFIDENCE,
     CONF_SAMPLES,
     CONF_STT_ENTITY,
+    CONF_STT_MIN_CONFIDENCE,
     CONF_USER,
     CONF_VOICE_SAMPLES,
     DEFAULT_BACKEND_URL,
     DEFAULT_MIN_CONFIDENCE,
+    DEFAULT_STT_MIN_CONFIDENCE,
     DOMAIN,
     ENTRY_TYPE_CONVERSATION,
     ENTRY_TYPE_MAIN,
@@ -165,6 +167,7 @@ class SpeakerRecognitionConfigFlow(ConfigFlow, domain=DOMAIN):
                     data={
                         CONF_ENTRY_TYPE: ENTRY_TYPE_STT,
                         CONF_STT_ENTITY: stt_entity,
+                        CONF_STT_MIN_CONFIDENCE: user_input[CONF_STT_MIN_CONFIDENCE],
                     },
                 )
 
@@ -176,6 +179,16 @@ class SpeakerRecognitionConfigFlow(ConfigFlow, domain=DOMAIN):
                         selector.EntitySelectorConfig(
                             domain=Platform.STT,
                         ),
+                    ),
+                    vol.Required(
+                        CONF_STT_MIN_CONFIDENCE, default=DEFAULT_STT_MIN_CONFIDENCE
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.0,
+                            max=1.0,
+                            step=0.05,
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
                     ),
                 }
             ),
@@ -303,10 +316,15 @@ class SpeakerRecognitionOptionsFlow(OptionsFlow):
                     title="",
                     data={
                         CONF_STT_ENTITY: user_input[CONF_STT_ENTITY],
+                        CONF_STT_MIN_CONFIDENCE: user_input[CONF_STT_MIN_CONFIDENCE],
                     },
                 )
 
         current_stt_entity = self.config_entry.data.get(CONF_STT_ENTITY)
+        current_stt_min_confidence = self.config_entry.options.get(
+            CONF_STT_MIN_CONFIDENCE,
+            self.config_entry.data.get(CONF_STT_MIN_CONFIDENCE, DEFAULT_STT_MIN_CONFIDENCE),
+        )
 
         return self.async_show_form(
             step_id="stt_options",
@@ -318,6 +336,16 @@ class SpeakerRecognitionOptionsFlow(OptionsFlow):
                         selector.EntitySelectorConfig(
                             domain=Platform.STT,
                         ),
+                    ),
+                    vol.Required(
+                        CONF_STT_MIN_CONFIDENCE, default=current_stt_min_confidence
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.0,
+                            max=1.0,
+                            step=0.05,
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
                     ),
                 }
             ),

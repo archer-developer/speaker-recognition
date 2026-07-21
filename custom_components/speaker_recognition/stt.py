@@ -26,7 +26,14 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .const import CONF_ENTRY_TYPE, CONF_STT_ENTITY, DOMAIN, ENTRY_TYPE_MAIN
+from .const import (
+    CONF_ENTRY_TYPE,
+    CONF_STT_ENTITY,
+    CONF_STT_MIN_CONFIDENCE,
+    DEFAULT_STT_MIN_CONFIDENCE,
+    DOMAIN,
+    ENTRY_TYPE_MAIN,
+)
 from .recognition import SpeakerRecognition
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,6 +71,7 @@ async def async_setup_entry(
                 entity_id,
                 config_entry.entry_id,
                 main_entry,
+                config_entry,
             )
         ]
     )
@@ -81,6 +89,7 @@ class SpeakerRecognitionSTTEntity(SpeechToTextEntity):
         stt_entity_id: str,
         unique_id: str,
         main_entry: ConfigEntry,
+        config_entry: ConfigEntry,
     ) -> None:
         """Initialize the STT entity."""
         registry = er.async_get(hass)
@@ -107,6 +116,7 @@ class SpeakerRecognitionSTTEntity(SpeechToTextEntity):
         self._attr_unique_id = unique_id
         self._stt_entity_id = stt_entity_id
         self._main_entry = main_entry
+        self._config_entry = config_entry
 
         self._cached_languages: list[str] | None = None
         self._cached_formats: list[AudioFormats] | None = None
@@ -162,6 +172,14 @@ class SpeakerRecognitionSTTEntity(SpeechToTextEntity):
 
         # Call once on adding to initialize
         _state_changed_listener()
+
+    @property
+    def min_confidence(self) -> float:
+        """Minimum speaker recognition confidence to pass audio to STT pipeline."""
+        return self._config_entry.options.get(
+            CONF_STT_MIN_CONFIDENCE,
+            self._config_entry.data.get(CONF_STT_MIN_CONFIDENCE, DEFAULT_STT_MIN_CONFIDENCE),
+        )
 
     @property
     def recognition(self) -> SpeakerRecognition:
@@ -257,8 +275,7 @@ class SpeakerRecognitionSTTEntity(SpeechToTextEntity):
                 recognition_result = await recognition_task
 
                 if recognition_result:
-                    # Log the recognition result as error for now
-                    _LOGGER.error(
+                    _LOGGER.debug(
                         "Speaker Recognition Result - User: %s, Confidence: %.3f, All scores: %s",
                         recognition_result.user_id,
                         recognition_result.confidence,
@@ -267,6 +284,14 @@ class SpeakerRecognitionSTTEntity(SpeechToTextEntity):
                             for user, score in recognition_result.all_scores.items()
                         },
                     )
+
+                    if recognition_result.confidence < self.min_confidence:
+                        _LOGGER.debug(
+                            "Rejecting audio as noise: confidence %.3f below threshold %.3f",
+                            recognition_result.confidence,
+                            self.min_confidence,
+                        )
+                        return SpeechResult(None, SpeechResultState.ERROR)
 
                     # Fire an event with the recognition result
                     self.hass.bus.async_fire(
