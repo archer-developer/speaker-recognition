@@ -142,8 +142,16 @@ class SpeakerRecognitionConversationEntity(
 
     @property
     def min_confidence(self) -> float:
-        """Get minimum confidence threshold."""
-        return self._config_entry.data.get(CONF_MIN_CONFIDENCE, DEFAULT_MIN_CONFIDENCE)
+        """Get minimum confidence threshold.
+
+        Options take precedence over the original entry data (set via the
+        options flow after entry creation), falling back to entry data and
+        finally the module default if neither is set.
+        """
+        return self._config_entry.options.get(
+            CONF_MIN_CONFIDENCE,
+            self._config_entry.data.get(CONF_MIN_CONFIDENCE, DEFAULT_MIN_CONFIDENCE),
+        )
 
     @callback
     def _async_update_properties(self) -> None:
@@ -215,11 +223,7 @@ class SpeakerRecognitionConversationEntity(
         speaker_data = self.hass.data.get("speaker_recognition", {}).get("last_result")
 
         if speaker_data:
-            # Get minimum confidence from options or data
-            min_confidence = self._config_entry.options.get(
-                CONF_MIN_CONFIDENCE,
-                self._config_entry.data.get(CONF_MIN_CONFIDENCE, 0.7),
-            )
+            min_confidence = self.min_confidence
 
             confidence = speaker_data.get("confidence", 0)
             recognized_user_id = speaker_data.get("user_id")
