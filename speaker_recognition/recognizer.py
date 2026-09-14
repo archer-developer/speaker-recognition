@@ -5,8 +5,12 @@ import logging
 from pathlib import Path
 
 import numpy as np
+import torch
+import torchaudio
 from numpy.typing import NDArray
-from resemblyzer import VoiceEncoder, preprocess_wav  # type: ignore[import-untyped]
+from speechbrain.inference.speaker import (
+    EncoderClassifier,  # type: ignore[import-untyped]
+)
 
 from speaker_recognition.models import (
     AudioInput,
@@ -20,6 +24,15 @@ from speaker_recognition.models import (
 
 _LOGGER = logging.getLogger(__name__)
 
+_MODEL_SOURCE = "speechbrain/spkrec-ecapa-voxceleb"
+_MODEL_SAMPLE_RATE = 16000
+# Deliberately independent of the (user-configurable) embeddings_directory:
+# the recognizer singleton below is constructed at import time, before
+# __main__.py applies the EMBEDDINGS_DIR env var/CLI override, so tying the
+# model cache to self._embeddings_directory would pin it to the stale
+# default on every process start.
+_MODEL_CACHE_DIR = ".speechbrain_ecapa"
+
 
 class SpeakerRecognizer:
     """Handle speaker recognition operations."""
@@ -30,11 +43,20 @@ class SpeakerRecognizer:
         Args:
             config: Application configuration
         """
-        self._encoder: VoiceEncoder = VoiceEncoder()
-        self._reference_embeddings: dict[str, NDArray[np.float32]] = {}
-        self._is_trained = False
         self._config = config
         self._embeddings_directory = Path(config.embeddings_directory)
+        self._embeddings_directory.mkdir(parents=True, exist_ok=True)
+
+        # No GPU on the target deployment hosts (HA addon / Docker on a
+        # plain CPU box) - pin explicitly instead of letting speechbrain
+        # auto-detect, to avoid it probing for CUDA on every load.
+        self._encoder = EncoderClassifier.from_hparams(
+            source=_MODEL_SOURCE,
+            savedir=_MODEL_CACHE_DIR,
+            run_opts={"device": "cpu"},
+        )
+        self._reference_embeddings: dict[str, NDArray[np.float32]] = {}
+        self._is_trained = False
 
     @property
     def is_trained(self) -> bool:
@@ -56,14 +78,14 @@ class SpeakerRecognizer:
         self._config.embeddings_directory = value
         self._embeddings_directory = Path(value)
 
-    def process_audio_input(self, audio_input: AudioInput) -> NDArray[np.float32]:
+    def process_audio_input(self, audio_input: AudioInput) -> torch.Tensor:
         """Process audio input from base64 encoded data.
 
         Args:
             audio_input: Audio input containing base64 encoded audio
 
         Returns:
-            Preprocessed audio waveform
+            Waveform tensor at the model's expected sample rate
         """
         audio_bytes = base64.b64decode(audio_input.audio_data)
         audio_array_int16 = np.frombuffer(audio_bytes, dtype=np.int16).copy()
@@ -72,10 +94,22 @@ class SpeakerRecognizer:
             raise ValueError("Empty audio data")
 
         audio_array_float32 = audio_array_int16.astype(np.float32) / 32768.0
-        result: NDArray[np.float32] = preprocess_wav(
-            audio_array_float32, source_sr=audio_input.sample_rate
-        )
-        return result
+        waveform = torch.from_numpy(audio_array_float32)
+
+        if audio_input.sample_rate != _MODEL_SAMPLE_RATE:
+            waveform = torchaudio.functional.resample(
+                waveform, audio_input.sample_rate, _MODEL_SAMPLE_RATE
+            )
+
+        return waveform
+
+    def _embed(self, waveform: torch.Tensor) -> NDArray[np.float32]:
+        """Compute a unit-normalized speaker embedding for a waveform."""
+        with torch.no_grad():
+            raw_embedding = self._encoder.encode_batch(waveform.unsqueeze(0))
+        embedding = raw_embedding.squeeze().numpy().astype(np.float32)
+        normalized: NDArray[np.float32] = embedding / np.linalg.norm(embedding)
+        return normalized
 
     def train(self, request: TrainingRequest) -> TrainingResult:
         """Train the speaker recognition model.
@@ -89,8 +123,6 @@ class SpeakerRecognizer:
         if not request.voice_samples:
             raise ValueError("No voice samples provided")
 
-        self._embeddings_directory.mkdir(parents=True, exist_ok=True)
-
         self._reference_embeddings = {}
         _LOGGER.info(f"Training with {len(request.voice_samples)} voice samples")
 
@@ -102,7 +134,9 @@ class SpeakerRecognizer:
 
             try:
                 embedding: NDArray[np.float32]
-                embedding_path = self._embeddings_directory / f"{user_id}_embedding.npy"
+                embedding_path = (
+                    self._embeddings_directory / f"{user_id}_ecapa_embedding.npy"
+                )
 
                 if embedding_path.exists():
                     _LOGGER.debug(f"Loading cached embedding from {embedding_path}")
@@ -110,8 +144,8 @@ class SpeakerRecognizer:
                     embedding = np.asarray(loaded_data)
                 else:
                     _LOGGER.debug("Creating embedding from audio input")
-                    wav = self.process_audio_input(audio_input)
-                    embedding = np.asarray(self._encoder.embed_utterance(wav))
+                    waveform = self.process_audio_input(audio_input)
+                    embedding = self._embed(waveform)
 
                     np.save(embedding_path, embedding)
                     _LOGGER.debug(f"Embedding cached to {embedding_path}")
@@ -151,8 +185,8 @@ class SpeakerRecognizer:
         if not self._is_trained or not self._reference_embeddings:
             raise RuntimeError("Model not trained")
 
-        wav = self.process_audio_input(request.audio)
-        chunk_embedding = self._encoder.embed_utterance(wav)
+        waveform = self.process_audio_input(request.audio)
+        chunk_embedding = self._embed(waveform)
 
         scores: dict[str, float] = {}
         for user_id, reference_embedding in self._reference_embeddings.items():

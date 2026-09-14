@@ -1,16 +1,13 @@
 """Main entry point for speaker recognition service."""
 
 import logging
-import warnings
 
 import typer
 import uvicorn
 from dotenv import load_dotenv
 
-warnings.filterwarnings("ignore", category=UserWarning, module="webrtcvad")
-
-from speaker_recognition.api import app  # noqa: E402
-from speaker_recognition.const import (  # noqa: E402
+from speaker_recognition.api import app
+from speaker_recognition.const import (
     DEFAULT_ACCESS_LOG,
     DEFAULT_EMBEDDINGS_DIR,
     DEFAULT_HOST,
@@ -22,9 +19,9 @@ from speaker_recognition.const import (  # noqa: E402
     ENV_LOG_LEVEL,
     ENV_PORT,
 )
-from speaker_recognition.logging_config import configure_logging  # noqa: E402
-from speaker_recognition.models import config  # noqa: E402
-from speaker_recognition.recognizer import recognizer  # noqa: E402
+from speaker_recognition.logging_config import configure_logging
+from speaker_recognition.models import config
+from speaker_recognition.recognizer import recognizer
 
 load_dotenv()
 cli = typer.Typer(name="speaker-recognition", help="Speaker Recognition Service")

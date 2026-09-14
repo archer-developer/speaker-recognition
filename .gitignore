@@ -218,3 +218,7 @@ __marimo__/
 embeddings/
 
 .idea
+
+# Personal voice samples used for local model evaluation - not for git.
+/data/
+.DS_Store

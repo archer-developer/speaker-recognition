@@ -269,7 +269,8 @@ class SpeakerRecognitionSTTEntity(SpeechToTextEntity):
         )
 
         # Await the recognition task, which was very likely already finished
-        # by the time Whisper returned (Resemblyzer is much lighter-weight)
+        # by the time Whisper returned (the speaker embedding model is much
+        # lighter-weight than full transcription)
         if recognition_task is not None:
             try:
                 recognition_result = await recognition_task

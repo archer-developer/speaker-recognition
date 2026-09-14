@@ -1,7 +1,7 @@
 [project]
 name = "hass-speaker-recognition"
 version = "0.0.0-dev"
-description = "Speaker recognition for Home Assistant using Resemblyzer"
+description = "Speaker recognition for Home Assistant using ECAPA-TDNN"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
@@ -20,8 +20,9 @@ include = ["speaker_recognition*"]
 server = [
     "fastapi>=0.68.1",
     "python-dotenv>=0.20.0",
-    "torch>=1.9.0,<3.0.0; python_version < '3.10'",
-    "resemblyzer>=0.1.3; python_version < '3.10'",
+    "torch>=2.0.0,<3.0.0; python_version < '3.10'",
+    "torchaudio>=2.0.0,<3.0.0; python_version < '3.10'",
+    "speechbrain>=1.0.0; python_version < '3.10'",
     "setuptools>=59.6.0,<81",
     "typer>=0.10.0",
     "uvicorn>=0.16.0",
@@ -42,6 +43,7 @@ test = [
 
 [tool.uv.sources]
 torch = { index = "torch" }
+torchaudio = { index = "torch" }
 
 [[tool.uv.index]]
 name = "torch"
@@ -52,7 +54,5 @@ pythonpath = [
   "."
 ]
 filterwarnings = [
-  "ignore::DeprecationWarning:resemblyzer.*:",
-  "ignore::DeprecationWarning:webrtcvad:",
   "ignore::DeprecationWarning:pkg_resources:",
 ]

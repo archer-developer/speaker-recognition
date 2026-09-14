@@ -28,6 +28,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 RUN uv pip install --system --no-cache --index-strategy unsafe-best-match --break-system-packages -e ".[server]"
 
+# Bake the ECAPA-TDNN speaker embedding model into the image so the addon
+# doesn't need Hugging Face Hub access to start.
+RUN python3 -c "from speaker_recognition.recognizer import recognizer"
+
 ENV HOST=0.0.0.0 \
     PORT=8099 \
     LOG_LEVEL=INFO \

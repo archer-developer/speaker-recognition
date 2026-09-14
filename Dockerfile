@@ -16,6 +16,11 @@ RUN uv pip install --system --no-cache -e ".[server]"
 
 RUN mkdir -p /data/embeddings
 
+# Bake the ECAPA-TDNN speaker embedding model into the image so containers
+# don't need Hugging Face Hub access to start (and start in the same time
+# on every run instead of downloading ~80MB on first boot).
+RUN python3 -c "from speaker_recognition.recognizer import recognizer"
+
 EXPOSE 8099
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
