@@ -1,6 +1,7 @@
 """Speaker recognition logic."""
 
 import base64
+import hashlib
 import logging
 from pathlib import Path
 
@@ -111,8 +112,37 @@ class SpeakerRecognizer:
         normalized: NDArray[np.float32] = embedding / np.linalg.norm(embedding)
         return normalized
 
+    def _sample_embedding(self, user_id: str, audio_input: AudioInput) -> NDArray[np.float32]:
+        """Get (from cache) or compute the embedding for one enrollment sample.
+
+        Cached by content hash rather than user_id alone, since a user can
+        now enroll with several distinct recordings that must each keep
+        their own cache entry.
+        """
+        content_hash = hashlib.sha1(audio_input.audio_data.encode("utf-8")).hexdigest()[:16]
+        embedding_path = (
+            self._embeddings_directory / f"{user_id}_{content_hash}_ecapa_embedding.npy"
+        )
+
+        if embedding_path.exists():
+            _LOGGER.debug(f"Loading cached embedding from {embedding_path}")
+            loaded_data = np.load(embedding_path, allow_pickle=False)
+            return np.asarray(loaded_data)
+
+        _LOGGER.debug("Creating embedding from audio input")
+        waveform = self.process_audio_input(audio_input)
+        embedding = self._embed(waveform)
+        np.save(embedding_path, embedding)
+        _LOGGER.debug(f"Embedding cached to {embedding_path}")
+        return embedding
+
     def train(self, request: TrainingRequest) -> TrainingResult:
         """Train the speaker recognition model.
+
+        Users with multiple voice samples get a single reference embedding
+        that is the (re-normalized) average of each sample's embedding -
+        several enrollment recordings make for a more stable voiceprint
+        than any single one.
 
         Args:
             request: Training request with voice samples
@@ -126,38 +156,28 @@ class SpeakerRecognizer:
         self._reference_embeddings = {}
         _LOGGER.info(f"Training with {len(request.voice_samples)} voice samples")
 
+        sample_embeddings: dict[str, list[NDArray[np.float32]]] = {}
         for sample in request.voice_samples:
             user_id = sample.user
-            audio_input = sample.audio
-
             _LOGGER.info(f"Processing voice sample for user: {user_id}")
 
             try:
-                embedding: NDArray[np.float32]
-                embedding_path = (
-                    self._embeddings_directory / f"{user_id}_ecapa_embedding.npy"
-                )
-
-                if embedding_path.exists():
-                    _LOGGER.debug(f"Loading cached embedding from {embedding_path}")
-                    loaded_data = np.load(embedding_path, allow_pickle=False)
-                    embedding = np.asarray(loaded_data)
-                else:
-                    _LOGGER.debug("Creating embedding from audio input")
-                    waveform = self.process_audio_input(audio_input)
-                    embedding = self._embed(waveform)
-
-                    np.save(embedding_path, embedding)
-                    _LOGGER.debug(f"Embedding cached to {embedding_path}")
-
-                self._reference_embeddings[user_id] = embedding
-                _LOGGER.info(f"Successfully trained voice sample for user: {user_id}")
+                embedding = self._sample_embedding(user_id, sample.audio)
+                sample_embeddings.setdefault(user_id, []).append(embedding)
+                _LOGGER.info(f"Successfully processed voice sample for user: {user_id}")
 
             except Exception as error:
                 _LOGGER.error(
                     f"Error processing voice sample for user {user_id}: {error}"
                 )
                 continue
+
+        for user_id, embeddings in sample_embeddings.items():
+            centroid = np.mean(embeddings, axis=0)
+            self._reference_embeddings[user_id] = centroid / np.linalg.norm(centroid)
+            _LOGGER.info(
+                f"Averaged {len(embeddings)} sample(s) into reference for user: {user_id}"
+            )
 
         if self._reference_embeddings:
             self._is_trained = True

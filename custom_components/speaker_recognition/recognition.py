@@ -61,9 +61,27 @@ class SpeakerRecognition:
             voice_sample_models = []
             for sample in self.voice_samples:
                 user_id = sample["user"]
-                media_id = sample["samples"].get("media_content_id", "")
 
-                if media_id.startswith("media-source://media_source/local/"):
+                # The media selector is configured with multiple=True, so a
+                # person can have more than one enrollment recording - the
+                # backend averages all of a user's embeddings into a single
+                # reference. Normalize to a list since a single legacy
+                # selection is still stored as one dict rather than a
+                # one-element list.
+                raw_samples = sample["samples"]
+                media_entries = (
+                    raw_samples if isinstance(raw_samples, list) else [raw_samples]
+                )
+
+                for media_entry in media_entries:
+                    media_id = media_entry.get("media_content_id", "")
+
+                    if not media_id.startswith("media-source://media_source/local/"):
+                        _LOGGER.warning(
+                            "Unsupported media_content_id format: %s", media_id
+                        )
+                        continue
+
                     relative_path = media_id.replace(
                         "media-source://media_source/local/", ""
                     )
@@ -103,9 +121,6 @@ class SpeakerRecognition:
                             ),
                         )
                     )
-                else:
-                    _LOGGER.warning("Unsupported media_content_id format: %s", media_id)
-                    continue
 
             if not voice_sample_models:
                 _LOGGER.warning("No valid training samples prepared")
