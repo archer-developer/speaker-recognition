@@ -373,8 +373,9 @@ class SpeakerRecognitionOptionsFlow(OptionsFlow):
         current_conversation_entity = self.config_entry.data.get(
             CONF_CONVERSATION_ENTITY
         )
-        current_min_confidence = self.config_entry.data.get(
-            CONF_MIN_CONFIDENCE, DEFAULT_MIN_CONFIDENCE
+        current_min_confidence = self.config_entry.options.get(
+            CONF_MIN_CONFIDENCE,
+            self.config_entry.data.get(CONF_MIN_CONFIDENCE, DEFAULT_MIN_CONFIDENCE),
         )
 
         return self.async_show_form(
