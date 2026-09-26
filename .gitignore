@@ -222,3 +222,6 @@ embeddings/
 # Personal voice samples used for local model evaluation - not for git.
 /data/
 .DS_Store
+
+# Local SpeechBrain model cache (symlinks into ~/.cache/huggingface)
+.speechbrain_ecapa/
